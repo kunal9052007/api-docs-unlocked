@@ -1,0 +1,4 @@
+project_id = "frwrpiecwdqrktvjhynn"
+
+[functions.transform-api-docs]
+verify_jwt = false
