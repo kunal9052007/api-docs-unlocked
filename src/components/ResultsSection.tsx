@@ -1,10 +1,25 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import { Badge } from "./ui/badge";
+import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { BookOpen, FileText, GraduationCap, Download, Share2, Copy } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import { Copy, Check, Share2, Download, FileText, FileImage, GraduationCap, BookOpen } from "lucide-react";
+import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "./ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import {
+  downloadAsText,
+  downloadAsMarkdown,
+  downloadAsPDF,
+  downloadAsWord,
+  downloadAsPNG,
+  downloadAsJSON,
+} from "@/utils/downloadUtils";
 
 interface ResultsSectionProps {
   results: Array<{ format: string; content: string }>;
@@ -23,29 +38,104 @@ const formatColors = {
 };
 
 export const ResultsSection = ({ results }: ResultsSectionProps) => {
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [downloadingIndex, setDownloadingIndex] = useState<number | null>(null);
   const { toast } = useToast();
   
   if (results.length === 0) return null;
 
-  const copyContent = (content: string) => {
-    navigator.clipboard.writeText(content);
-    toast({
-      title: "Copied!",
-      description: "Documentation copied to clipboard",
-    });
+  const handleCopy = async (content: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+      toast({
+        title: "Copied!",
+        description: "Documentation copied to clipboard",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to copy to clipboard",
+        variant: "destructive",
+      });
+    }
   };
 
-  const downloadContent = (content: string, format: string) => {
-    const blob = new Blob([content], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${format.replace(/\s+/g, '-').toLowerCase()}.md`;
-    a.click();
-    toast({
-      title: "Downloaded!",
-      description: `${format} has been downloaded`,
-    });
+  const handleDownload = async (
+    content: string,
+    format: string,
+    index: number,
+    downloadFormat: string
+  ) => {
+    setDownloadingIndex(index);
+    try {
+      const filename = `api-docs-${format.toLowerCase().replace(/\s+/g, "-")}`;
+      const elementId = `result-${index}`;
+
+      switch (downloadFormat) {
+        case "txt":
+          downloadAsText(content, filename);
+          break;
+        case "md":
+          downloadAsMarkdown(content, filename);
+          break;
+        case "pdf":
+          await downloadAsPDF(elementId, filename);
+          break;
+        case "docx":
+          await downloadAsWord(content, filename);
+          break;
+        case "png":
+          await downloadAsPNG(elementId, filename);
+          break;
+        case "json":
+          downloadAsJSON(content, format, filename);
+          break;
+      }
+
+      toast({
+        title: "Downloaded!",
+        description: `Exported as ${downloadFormat.toUpperCase()}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to download file",
+        variant: "destructive",
+      });
+    } finally {
+      setDownloadingIndex(null);
+    }
+  };
+
+  const handleShare = async (content: string, format: string) => {
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: `API Documentation - ${format}`,
+          text: content,
+        });
+        toast({
+          title: "Shared!",
+          description: "Documentation shared successfully",
+        });
+      } else {
+        await handleCopy(content, -1);
+        toast({
+          title: "Copied!",
+          description: "Share not supported, content copied to clipboard",
+        });
+      }
+    } catch (error) {
+      if ((error as Error).name !== "AbortError") {
+        toast({
+          title: "Error",
+          description: "Failed to share",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   return (
@@ -82,61 +172,98 @@ export const ResultsSection = ({ results }: ResultsSectionProps) => {
           {results.map((result, index) => (
             <TabsContent key={index} value={index.toString()}>
               <Card className="shadow-elevated border-2 border-primary/20 hover:shadow-glow transition-all duration-300">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="flex items-center gap-3 text-2xl mb-2">
-                        <div className={`p-2 rounded-xl ${formatColors[result.format as keyof typeof formatColors]}`}>
-                          {formatIcons[result.format as keyof typeof formatIcons]}
-                        </div>
-                        {result.format}
-                      </CardTitle>
-                      <CardDescription className="text-base">
-                        {result.format === "Quick Start Guide" && "Perfect for getting started quickly with essential information"}
-                        {result.format === "Detailed Reference" && "Comprehensive technical documentation with all the details"}
-                        {result.format === "Interactive Tutorial" && "Learn by doing with hands-on examples and exercises"}
-                      </CardDescription>
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`p-2 rounded-xl ${formatColors[result.format as keyof typeof formatColors]}`}>
+                        {formatIcons[result.format as keyof typeof formatIcons]}
+                      </div>
+                      <h3 className="text-2xl font-bold">{result.format}</h3>
                     </div>
                     <div className="flex gap-2">
                       <Button
-                        variant="outline"
+                        onClick={() => handleCopy(result.content, index)}
                         size="sm"
-                        onClick={() => copyContent(result.content)}
-                        className="hover:bg-primary hover:text-primary-foreground transition-colors"
+                        variant="outline"
+                        className="border-primary/20 hover:bg-primary/10"
                       >
-                        <Copy className="h-4 w-4" />
+                        {copiedIndex === index ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
                       </Button>
+                      
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="border-primary/20 hover:bg-primary/10"
+                            disabled={downloadingIndex === index}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => handleDownload(result.content, result.format, index, "txt")}
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Text (.txt)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDownload(result.content, result.format, index, "md")}
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Markdown (.md)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDownload(result.content, result.format, index, "pdf")}
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            PDF (.pdf)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDownload(result.content, result.format, index, "docx")}
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            Word (.docx)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDownload(result.content, result.format, index, "png")}
+                          >
+                            <FileImage className="mr-2 h-4 w-4" />
+                            Image (.png)
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => handleDownload(result.content, result.format, index, "json")}
+                          >
+                            <FileText className="mr-2 h-4 w-4" />
+                            JSON (.json)
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      
                       <Button
-                        variant="outline"
+                        onClick={() => handleShare(result.content, result.format)}
                         size="sm"
-                        onClick={() => downloadContent(result.content, result.format)}
-                        className="hover:bg-secondary hover:text-secondary-foreground transition-colors"
+                        variant="outline"
+                        className="border-primary/20 hover:bg-primary/10"
                       >
-                        <Download className="h-4 w-4" />
+                        <Share2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="prose prose-slate max-w-none dark:prose-invert prose-headings:font-bold prose-h1:text-3xl prose-h2:text-2xl prose-h3:text-xl prose-pre:bg-muted prose-pre:border-2 prose-pre:border-primary/20 prose-code:text-primary prose-code:bg-muted prose-code:px-2 prose-code:py-1 prose-code:rounded prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-strong:text-primary prose-li:marker:text-primary">
+                  
+                  <div id={`result-${index}`} className="prose prose-invert max-w-none bg-background p-6 rounded-lg">
                     <ReactMarkdown>{result.content}</ReactMarkdown>
                   </div>
-                </CardContent>
+                </div>
               </Card>
             </TabsContent>
           ))}
         </Tabs>
-
-        <div className="mt-8 text-center">
-          <Button
-            variant="outline"
-            size="lg"
-            className="bg-gradient-accent text-white border-0 hover:shadow-glow transition-all duration-300 px-8 py-6 text-lg font-bold rounded-2xl"
-          >
-            <Share2 className="mr-2 h-5 w-5" />
-            Share Documentation
-          </Button>
-        </div>
       </div>
     </section>
   );

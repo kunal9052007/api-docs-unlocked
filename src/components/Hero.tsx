@@ -1,6 +1,7 @@
 import { BookOpen, Sparkles, Mic, Wand2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { BackgroundDoodles } from "./BackgroundDoodles";
+import { UserMenu } from "./UserMenu";
 
 interface HeroProps {
   onVoiceModeClick: () => void;
@@ -8,8 +9,13 @@ interface HeroProps {
 
 export const Hero = ({ onVoiceModeClick }: HeroProps) => {
   return (
-    <section className="relative overflow-hidden bg-gradient-hero py-24 px-6">
+    <section className="relative overflow-hidden bg-gradient-hero py-12 px-6">
       <BackgroundDoodles />
+      
+      {/* Navigation */}
+      <div className="container mx-auto relative z-10 flex justify-end mb-8">
+        <UserMenu />
+      </div>
       
       <div className="container mx-auto max-w-5xl relative z-10">
         <div className="flex items-center justify-center mb-8 gap-4">
